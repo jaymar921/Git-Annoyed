@@ -1,0 +1,84 @@
+name: Auto Commit
+on:
+  schedule:
+    - cron: "0 * * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  commit-user1:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Auto Commit Loop - User 1
+        run: |
+          set -e
+          FILE="files/$USERNAME/README.md"
+          COMMIT_LOOP_COUNT=$FREQUENCY
+
+          echo "Configuring Git..."
+          git config --global user.name "$USERNAME"
+          git config --global user.email "$EMAIL"
+
+          for ((i=1; i<=COMMIT_LOOP_COUNT; i++)); do
+
+            if [ ! -f "$FILE" ]; then
+              echo "File not found, creating $FILE..."
+              mkdir -p "$(dirname $FILE)"
+              echo "# Git Auto Commit | User 1" > "$FILE"
+              echo "This file was added $(date +"%b %d, %Y")" >> "$FILE"
+              echo "" >> "$FILE"
+              echo "Just for fun and keeping my daily git commit active 🤪" >> "$FILE"
+              echo "" >> "$FILE"
+              echo "commit number: 1" >> "$FILE"
+              CURRENT=1
+            else
+              CURRENT=$(grep -oP 'commit number: \K\d+' "$FILE" || echo "0")
+              NEXT=$((CURRENT + 1))
+              sed -i "/commit number: /c\commit number: $NEXT" "$FILE"
+              CURRENT=$NEXT
+            fi
+
+            # Retry git add + commit up to 3 times
+            SUCCESS=false
+            for attempt in 1 2 3; do
+              if git add "$FILE" && git commit -m "Auto commit #$CURRENT : target - ($FILE)"; then
+                SUCCESS=true
+                break
+              fi
+              echo "Attempt $attempt failed, retrying in 2s..."
+              git rm --cached "$FILE" 2>/dev/null || true
+              sleep 2
+            done
+
+            if [ "$SUCCESS" = false ]; then
+              echo "Failed to commit after 3 attempts, skipping iteration $i"
+              continue
+            fi
+
+            echo "Committed #$CURRENT"
+
+            # Periodic GC every 100 commits to keep object store healthy
+            if (( i % 100 == 0 )); then
+              echo "Running git gc..."
+              git gc --auto --quiet
+            fi
+          done
+
+          echo "Pulling latest changes before push..."
+          git pull --rebase origin main
+          echo "Pushing commits..."
+          git push origin main
+          echo "Done!"
+        shell: bash
+        env:
+          USERNAME: ${{ secrets.USERNAME }}
+          EMAIL: ${{ secrets.EMAIL }}
+          FREQUENCY: ${{ secrets.FREQUENCY }}
