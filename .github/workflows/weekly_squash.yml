@@ -1,0 +1,44 @@
+name: Weekly Squash History
+on:
+  schedule:
+    - cron: "0 1 * * 0" # Every Sunday at 1:00 AM UTC
+
+permissions:
+  contents: write
+
+jobs:
+  squash-main:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Squash History
+        run: |
+          set -e
+          echo "Configuring Git..."
+          git config --global user.name "$USERNAME"
+          git config --global user.email "$EMAIL"
+
+          echo "Getting root commit..."
+          ROOT=$(git rev-list --max-parents=0 HEAD)
+          echo "Root commit: $ROOT"
+
+          echo "Soft resetting to root..."
+          git reset --soft $ROOT
+
+          echo "Squashing all commits into one..."
+          git commit --amend -m "squashed: weekly cleanup $(date +'%Y-%m-%d')"
+
+          echo "Force pushing squashed history..."
+          git push --force
+
+          echo "Squash completed!"
+        shell: bash
+        env:
+          USERNAME: ${{ secrets.USERNAME }}
+          EMAIL: ${{ secrets.EMAIL }}
