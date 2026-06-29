@@ -2,10 +2,8 @@ name: Auto Commit
 on:
   schedule:
     - cron: "0 * * * *"
-
 permissions:
   contents: write
-
 jobs:
   commit-user1:
     runs-on: ubuntu-latest
@@ -13,10 +11,9 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Auto Commit Loop - User 1
         run: |
           set -e
@@ -28,9 +25,7 @@ jobs:
           git config --global user.email "$EMAIL"
 
           for ((i=1; i<=COMMIT_LOOP_COUNT; i++)); do
-
             if [ ! -f "$FILE" ]; then
-              echo "File not found, creating $FILE..."
               mkdir -p "$(dirname $FILE)"
               echo "# Git Auto Commit | User 1" > "$FILE"
               echo "This file was added $(date +"%b %d, %Y")" >> "$FILE"
@@ -46,7 +41,6 @@ jobs:
               CURRENT=$NEXT
             fi
 
-            # Retry git add + commit up to 3 times
             SUCCESS=false
             for attempt in 1 2 3; do
               if git add "$FILE" && git commit -m "Auto commit #$CURRENT : target - ($FILE)"; then
@@ -64,18 +58,20 @@ jobs:
             fi
 
             echo "Committed #$CURRENT"
-
-            # Periodic GC every 100 commits to keep object store healthy
-            if (( i % 100 == 0 )); then
-              echo "Running git gc..."
-              git gc --auto --quiet
-            fi
           done
 
-          echo "Pulling latest changes before push..."
-          git pull --rebase origin main
           echo "Pushing commits..."
-          git push origin main
+          for attempt in 1 2 3; do
+            if git push origin main; then
+              echo "Push succeeded."
+              break
+            fi
+            echo "Push attempt $attempt failed, fetching and retrying..."
+            git fetch origin main
+            git rebase origin/main
+            sleep 3
+          done
+
           echo "Done!"
         shell: bash
         env:
