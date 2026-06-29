@@ -67,7 +67,7 @@ jobs:
               break
             fi
             echo "Push attempt $attempt failed, fetching and retrying..."
-            git fetch origin main
+            git fetch --unshallow origin main 2>/dev/null || git fetch origin main
             git rebase origin/main
             sleep 3
           done
